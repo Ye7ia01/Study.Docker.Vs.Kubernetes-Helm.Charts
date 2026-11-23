@@ -43,12 +43,12 @@ database/       init.sql — schema + seed data for Postgres
 
 | Var            | Used by  | Purpose                                          | Docker example        | Kubernetes example              |
 |-----------------|----------|---------------------------------------------------|------------------------|----------------------------------|
-| `BACKEND_URL`   | frontend | address of the backend service                    | `http://backend:5000`  | `http://backend-service:5000`   |
-| `DB_HOST`       | backend  | address of the database service                    | `database`              | `postgres-service`               |
+| `BACKEND_URL`   | frontend | address of the backend service                    | `http://backend:5000`  | `http://backend:<global.backendPort>` |
+| `DB_HOST`       | backend  | address of the database service                    | `database`              | `database`                       |
 | `DB_PORT`       | backend  | database port                                       | `5432`                  | `5432`                           |
-| `DB_USER`       | backend  | database user                                       | `todo_user`             | (from Secret)                    |
+| `DB_USER`       | backend  | database user                                       | `todo_user`             | `global.postgresql.auth.username` |
 | `DB_PASSWORD`   | backend  | database password                                   | `todo_pass`             | (from Secret)                    |
-| `DB_NAME`       | backend  | database name                                       | `todo_db`               | (from Secret/ConfigMap)          |
+| `DB_NAME`       | backend  | database name                                       | `todo_db`               | `global.postgresql.auth.database` |
 | `PORT`          | both     | port each service listens on                        | `3000` / `5000`         | same                              |
 | `POSTGRES_USER/PASSWORD/DB` | db image | standard Postgres image init vars      | matches `DB_USER` etc.  | matches `DB_USER` etc.           |
 
@@ -88,36 +88,54 @@ Open the app at <http://localhost:3000>.
 
 To stop it, run `docker compose down` (add `-v` to also delete the database volume).
 
-## 3. Kubernetes deployment (kind)
+## 3. Kubernetes deployment (Helm + minikube)
 
-Prerequisites: Docker, [kind](https://kind.sigs.k8s.io/) and `kubectl`.
-Run the commands from the repo root.
+Prerequisites: Docker, [minikube](https://minikube.sigs.k8s.io/), `kubectl` and [Helm](https://helm.sh/).
+Run the commands from the repo root. The chart lives in `helm_deployment/`.
 
-1. Build the images. The manifests expect the tags `frontend:latest` and `backend:latest`:
+1. Build the images. The chart expects the tags `frontend:latest` and `backend:latest`:
    ```
    docker build -t frontend:latest ./frontend
    docker build -t backend:latest ./backend
    ```
-2. Create the cluster (1 control-plane + 2 workers, named `docker-vs-kubernetes`):
+2. Start a minikube cluster:
    ```
-   kind create cluster --config kubernetes/kind_cluster.yaml
+   minikube start
    ```
-3. Load the images into the cluster nodes. kind nodes can't see your local Docker images otherwise:
+3. Load the images into minikube. Minikube runs its own internal container runtime, separate from your host's Docker daemon, so it can't see locally built images otherwise:
    ```
-   kind load docker-image frontend:latest backend:latest --name docker-vs-kubernetes
+   minikube image load frontend:latest
+   minikube image load backend:latest
    ```
-4. Apply the manifests:
+4. Resolve the chart's dependencies (downloads the Postgres chart, packages the local `backend`/`frontend` subcharts):
    ```
-   kubectl apply -f kubernetes/
+   helm dependency update ./helm_deployment
    ```
-   `kind_cluster.yaml` lives in the same folder, so kubectl reports an error
-   for that one file. It is not a Kubernetes resource and the error can be ignored.
-5. Check that everything is running:
+   Re-run this any time you edit `helm_deployment/charts/backend` or `helm_deployment/charts/frontend` — local
+   chart dependencies are snapshotted into `.tgz` files at update time, so edits made afterward won't be picked
+   up until you run it again.
+5. Install (or upgrade) the release. `helm_deployment/values/` has per-environment override files
+   (`values-dev.yaml`, `values-uat.yaml`, `values-prod.yaml`) — pick whichever fits:
    ```
-   kubectl get pods -o wide
+   helm upgrade --install todo ./helm_deployment -f ./helm_deployment/values/values-dev.yaml
    ```
+   `--install` makes this idempotent: it installs if the release doesn't exist yet, or upgrades it in place if it does.
+6. Check that everything is running:
+   ```
+   kubectl get pods
+   ```
+7. Open the app:
+   ```
+   minikube service frontend --url
+   ```
+   On Windows/Mac with the `docker` driver, minikube's node runs inside an isolated container/VM, so its IP and
+   NodePort aren't directly reachable from the host — `minikube service` sets up the tunnel for you. As an
+   alternative, `kubectl port-forward service/frontend <local-port>:<service-port>` always works regardless of driver.
 
-Open the app at <http://localhost:30000> or <http://localhost:30001>. These
-are the two worker nodes, each mapping its NodePort `30000` to a host port.
+If a change only affects values read via a ConfigMap (e.g. `global.backendPort`), already-running pods won't
+pick it up automatically — force a rollout after upgrading:
+```
+kubectl rollout restart deployment/backend deployment/frontend
+```
 
-To remove the cluster, run `kind delete cluster --name docker-vs-kubernetes`.
+To remove the release, run `helm uninstall todo`. To remove the cluster entirely, run `minikube delete`.

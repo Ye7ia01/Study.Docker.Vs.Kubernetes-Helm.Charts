@@ -1,0 +1,14 @@
+# Dev environment overrides.
+# Only keys that differ from the base values.yaml need to be listed here.
+
+global:
+  backendPort: 8080 # shared by backend's Service and frontend's BACKEND_URL
+
+backend:
+  replicaCount: 1
+
+frontend:
+  replicaCount: 1
+  service:
+    port: 8081      # Service port (internal, cluster-facing)
+    nodePort: 30080  # external port reachable via minikube

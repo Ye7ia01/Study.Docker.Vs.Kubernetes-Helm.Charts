@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "backend.fullname" . }}
+data:
+  # CLuster IP service name of the database service
+  DB_HOST: {{ .Values.global.postgresql.fullnameOverride }}
+  PORT: "{{ .Values.appPort }}"

@@ -1,0 +1,9 @@
+# Config Map does not necessarily be env variables
+# Configmap + volume = file name as key and content as value
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-config
+data:
+  init.sql: |
+{{ .Files.Get "files/init.sql" | indent 4 }}

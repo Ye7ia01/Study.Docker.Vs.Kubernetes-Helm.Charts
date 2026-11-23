@@ -1,0 +1,47 @@
+# Default values for helm_deplyment.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+replicaCount: 1
+
+fullnameOverride: ""
+
+# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+service:
+  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  type: ClusterIP
+  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+  port: 80
+
+
+postgresql:
+  primary:
+    initdb:
+      scriptsConfigMap: database-config
+    service:
+      type: ClusterIP
+      ports:
+        postgresql: 5432 # Port for the PostgreSQL service
+    persistence:
+      existingClaim: database-pvc
+  containerPorts:
+    postgresql: 5432 # Port of the database container application
+
+global:
+  backendPort: 5000 # Shared backend Service port, consumed by both the backend chart and frontend's BACKEND_URL
+  postgresql:
+    fullnameOverride: database # Override database name with constant to pass it to backend
+    auth:
+      username: todo_user
+      database: todo_db
+      # DO NOT commit a real password. Override at install time, e.g.:
+      #   --set global.postgresql.auth.password=<real-password>
+      # or via an untracked values file.
+      password: "CHANGE_ME_AT_INSTALL_TIME"
+        # Name of the existing secret containing the database credentials.
+      existingSecret: database-secret
+      secretKeys:
+          # The name of the key in the secret containing the user's password.
+        userPasswordKey: POSTGRES_PASSWORD
+        adminPasswordKey: POSTGRES_PASSWORD

@@ -1,0 +1,14 @@
+# Prod environment overrides.
+# Only keys that differ from the base values.yaml need to be listed here.
+
+global:
+  backendPort: 8100 # shared by backend's Service and frontend's BACKEND_URL
+
+backend:
+  replicaCount: 3
+
+frontend:
+  replicaCount: 3
+  service:
+    port: 8101      # Service port (internal, cluster-facing)
+    nodePort: 30100  # external port reachable via minikube
